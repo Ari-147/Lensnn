@@ -1,0 +1,27 @@
+[project]
+name = "lensnn"
+version = "0.1.0"
+description = "Explainability library: activations, Grad-CAM, SHAP, LIME, decision boundary, calibration — viewed through a local dashboard."
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "captum",
+    "shap",
+    "lime",
+    "scikit-learn",
+    "fastapi",
+    "uvicorn",
+    "numpy",
+    "pandas",
+]
+
+[project.scripts]
+lensnn = "lensnn.server.app:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lensnn*"]
