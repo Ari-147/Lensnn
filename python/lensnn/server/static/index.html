@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LensNN Viewer</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
+  h1 { margin-bottom: 0.25rem; }
+  .controls { margin-bottom: 1.5rem; }
+  .controls label { margin-right: 1.5rem; }
+  select { padding: 0.25rem; min-width: 220px; }
+  table { border-collapse: collapse; width: 100%; max-width: 800px; }
+  th, td { border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left; }
+  th { background: #f4f4f4; }
+  #empty-msg { color: #666; }
+</style>
+</head>
+<body>
+<h1>LensNN</h1>
+<p id="empty-msg">Loading...</p>
+
+<div class="controls">
+  <label>Run:
+    <select id="run-select"></select>
+  </label>
+  <label>Capture:
+    <select id="capture-select"></select>
+  </label>
+</div>
+
+<table>
+  <thead>
+    <tr><th>Layer</th><th>Shape</th><th>Mean</th><th>Std</th></tr>
+  </thead>
+  <tbody id="activations-body"></tbody>
+</table>
+
+<script>
+const runSelect = document.getElementById('run-select');
+const captureSelect = document.getElementById('capture-select');
+const activationsBody = document.getElementById('activations-body');
+const emptyMsg = document.getElementById('empty-msg');
+
+async function loadRuns() {
+  const res = await fetch('/api/runs');
+  const runs = await res.json();
+  runSelect.innerHTML = '';
+  if (!runs.length) {
+    emptyMsg.textContent = 'No runs found yet.';
+    return;
+  }
+  emptyMsg.textContent = '';
+  for (const run of runs) {
+    const opt = document.createElement('option');
+    opt.value = run.run_id;
+    opt.textContent = `${run.name} (${run.framework})`;
+    runSelect.appendChild(opt);
+  }
+  await loadCaptures(runs[0].run_id);
+}
+
+async function loadCaptures(runId) {
+  const res = await fetch(`/api/runs/${runId}/captures`);
+  const captures = await res.json();
+  captureSelect.innerHTML = '';
+  for (const capture of captures) {
+    const opt = document.createElement('option');
+    opt.value = capture.capture_id;
+    opt.textContent = capture.step === null
+      ? `explain @ ${capture.timestamp}`
+      : `epoch ${capture.step}`;
+    captureSelect.appendChild(opt);
+  }
+  if (captures.length) {
+    await loadActivations(captures[0].capture_id);
+  } else {
+    activationsBody.innerHTML = '';
+  }
+}
+
+async function loadActivations(captureId) {
+  const res = await fetch(`/api/captures/${captureId}/activations`);
+  const activations = await res.json();
+  activationsBody.innerHTML = '';
+  for (const [layer, stats] of Object.entries(activations)) {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${layer}</td>
+      <td>${stats.shape.join(' x ')}</td>
+      <td>${stats.mean.toFixed(4)}</td>
+      <td>${stats.std.toFixed(4)}</td>
+    `;
+    activationsBody.appendChild(row);
+  }
+}
+
+runSelect.addEventListener('change', e => loadCaptures(e.target.value));
+captureSelect.addEventListener('change', e => loadActivations(e.target.value));
+
+loadRuns();
+</script>
+</body>
+</html>
