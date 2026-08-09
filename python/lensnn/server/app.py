@@ -13,6 +13,8 @@ from ..hooks.activations import from_arrays as activations_from_arrays
 from ..methods.gradcam import from_arrays as gradcam_from_arrays
 from ..methods.shap_explain import from_arrays as shap_from_arrays
 from ..methods.lime_explain import from_arrays as lime_from_arrays
+from ..methods.boundary import from_arrays as boundary_from_arrays
+from ..methods.calibration import from_arrays as calibration_from_arrays
 
 app = FastAPI(title="LensNN Viewer")
 _state = {"runs_dir": config.RUNS_DIR}
@@ -103,6 +105,49 @@ def get_lime(capture_id: str):
 
     values = result["values"]
     return {"available": True, "values": values.tolist(), "shape": list(values.shape)}
+
+
+@app.get("/api/captures/{capture_id}/boundary")
+def get_boundary(capture_id: str):
+    capture = _get_capture_or_404(capture_id)
+    if not os.path.exists(capture["npz_path"]):
+        return {"available": False}
+
+    result = boundary_from_arrays(_load_npz(capture["npz_path"]))
+    if result is None:
+        return {"available": False}
+
+    response = {
+        "available": True,
+        "grid_x": result["grid_x"].tolist(),
+        "grid_y": result["grid_y"].tolist(),
+        "grid_values": result["grid_values"].tolist(),
+        "points_2d": result["points_2d"].tolist(),
+        "point_pred_values": result["point_pred_values"].tolist(),
+    }
+    if "point_true_values" in result:
+        response["point_true_values"] = result["point_true_values"].tolist()
+    return response
+
+
+@app.get("/api/captures/{capture_id}/calibration")
+def get_calibration(capture_id: str):
+    capture = _get_capture_or_404(capture_id)
+    if not os.path.exists(capture["npz_path"]):
+        return {"available": False}
+
+    result = calibration_from_arrays(_load_npz(capture["npz_path"]))
+    if result is None:
+        return {"available": False}
+
+    return {
+        "available": True,
+        "bin_edges": result["bin_edges"].tolist(),
+        "bin_confidence": result["bin_confidence"].tolist(),
+        "bin_accuracy": result["bin_accuracy"].tolist(),
+        "bin_count": result["bin_count"].tolist(),
+        "ece": result["ece"],
+    }
 
 
 _static_dir = Path(__file__).parent / "static"

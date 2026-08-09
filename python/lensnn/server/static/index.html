@@ -30,6 +30,28 @@
   .shap-axis text { font-size: 11px; }
   #lime-panel { display: none; }
   #lime-panel h3 { font-size: 0.95rem; margin: 1rem 0 0.25rem; color: #444; }
+  #boundary-panel { display: none; }
+  .approx-caveat {
+    background: #fff8e1;
+    border: 1px solid #f0c674;
+    color: #7a5c00;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    max-width: 640px;
+    margin: 0.5rem 0 1rem;
+  }
+  .boundary-canvas-wrap { position: relative; width: 400px; height: 400px; }
+  .boundary-canvas-wrap canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 400px;
+  }
+  #boundary-grid-canvas { image-rendering: pixelated; border: 1px solid #ccc; }
+  #calibration-panel { display: none; }
+  #calibration-ece { font-size: 1rem; font-weight: 600; margin: 0.5rem 0; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
@@ -95,6 +117,25 @@
   <svg id="lime-sample-chart" width="640" height="280"></svg>
 </div>
 
+<div id="boundary-panel">
+  <h2>Decision Boundary</h2>
+  <p class="approx-caveat">
+    ⚠ This is a 2D PCA projection of the model's decision regions, not
+    the true boundary in the original feature space — an approximation
+    for visualization only.
+  </p>
+  <div class="boundary-canvas-wrap">
+    <canvas id="boundary-grid-canvas"></canvas>
+    <canvas id="boundary-points-canvas"></canvas>
+  </div>
+</div>
+
+<div id="calibration-panel">
+  <h2>Calibration</h2>
+  <p id="calibration-ece"></p>
+  <svg id="calibration-chart" width="420" height="420"></svg>
+</div>
+
 <script>
 const runSelect = document.getElementById('run-select');
 const captureSelect = document.getElementById('capture-select');
@@ -118,6 +159,13 @@ const limeClassLabel = document.getElementById('lime-class-label');
 const limeClassSelect = document.getElementById('lime-class-select');
 const limeSampleSelect = document.getElementById('lime-sample-select');
 let limeData = null;
+
+const boundaryPanel = document.getElementById('boundary-panel');
+let boundaryData = null;
+
+const calibrationPanel = document.getElementById('calibration-panel');
+const calibrationEce = document.getElementById('calibration-ece');
+let calibrationData = null;
 
 async function loadRuns() {
   const res = await fetch('/api/runs');
@@ -156,6 +204,8 @@ async function loadCaptures(runId) {
     hideGradcamPanel();
     hideShapPanel();
     hideLimePanel();
+    hideBoundaryPanel();
+    hideCalibrationPanel();
   }
 }
 
@@ -165,6 +215,8 @@ async function loadCapture(captureId) {
     loadGradcam(captureId),
     loadShap(captureId),
     loadLime(captureId),
+    loadBoundary(captureId),
+    loadCalibration(captureId),
   ]);
 }
 
@@ -415,6 +467,168 @@ function renderLime() {
   // the two are visually comparable for the same sample.
   const perSample = values2d[sampleIdx].map((value, i) => ({ feature: `f${i}`, value }));
   renderBarChart('#lime-sample-chart', perSample, true);
+}
+
+const CLASS_PALETTE = ['#4c78a8', '#f58518', '#54a24b', '#e45756', '#72b7b2', '#eeca3b', '#b279a2', '#ff9da6'];
+
+function hexToRgb(hex) {
+  const v = parseInt(hex.slice(1), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+
+function hideBoundaryPanel() {
+  boundaryPanel.style.display = 'none';
+  boundaryData = null;
+}
+
+async function loadBoundary(captureId) {
+  const res = await fetch(`/api/captures/${captureId}/boundary`);
+  const data = await res.json();
+  if (!data.available) {
+    hideBoundaryPanel();
+    return;
+  }
+  boundaryData = data;
+  boundaryPanel.style.display = 'block';
+  renderBoundary(data);
+}
+
+function renderBoundary(data) {
+  const gridValues = data.grid_values; // [R_y][R_x]
+  const numRows = gridValues.length;
+  const numCols = gridValues[0].length;
+  const flatVals = gridValues.flat();
+  const isDiscrete = flatVals.every(v => Number.isInteger(v));
+  const minV = Math.min(...flatVals);
+  const maxV = Math.max(...flatVals);
+
+  const gridCanvas = document.getElementById('boundary-grid-canvas');
+  gridCanvas.width = numCols;
+  gridCanvas.height = numRows;
+  const gctx = gridCanvas.getContext('2d');
+  const frame = gctx.createImageData(numCols, numRows);
+
+  for (let row = 0; row < numRows; row++) {
+    for (let col = 0; col < numCols; col++) {
+      const v = gridValues[row][col];
+      let rgb;
+      if (isDiscrete) {
+        rgb = hexToRgb(CLASS_PALETTE[Math.abs(Math.round(v)) % CLASS_PALETTE.length]);
+      } else {
+        const t = (v - minV) / ((maxV - minV) || 1);
+        rgb = [Math.round(255 * t), Math.round(255 * (1 - t)), 120];
+      }
+      const idx = (row * numCols + col) * 4;
+      frame.data[idx] = rgb[0];
+      frame.data[idx + 1] = rgb[1];
+      frame.data[idx + 2] = rgb[2];
+      frame.data[idx + 3] = 190;
+    }
+  }
+  gctx.putImageData(frame, 0, 0);
+
+  const pointsCanvas = document.getElementById('boundary-points-canvas');
+  const cssSize = 400;
+  pointsCanvas.width = cssSize;
+  pointsCanvas.height = cssSize;
+  const pctx = pointsCanvas.getContext('2d');
+  pctx.clearRect(0, 0, cssSize, cssSize);
+
+  const xMin = data.grid_x[0], xMax = data.grid_x[data.grid_x.length - 1];
+  const yMin = data.grid_y[0], yMax = data.grid_y[data.grid_y.length - 1];
+  const toPixel = (px, py) => [
+    (px - xMin) / (xMax - xMin) * cssSize,
+    (py - yMin) / (yMax - yMin) * cssSize,
+  ];
+
+  const pointValues = data.point_true_values || data.point_pred_values;
+
+  for (let i = 0; i < data.points_2d.length; i++) {
+    const [px, py] = data.points_2d[i];
+    const [cx, cy] = toPixel(px, py);
+    const v = pointValues[i];
+    const color = isDiscrete ? CLASS_PALETTE[Math.abs(Math.round(v)) % CLASS_PALETTE.length] : '#222';
+    pctx.beginPath();
+    pctx.arc(cx, cy, 4, 0, 2 * Math.PI);
+    pctx.fillStyle = color;
+    pctx.strokeStyle = '#fff';
+    pctx.lineWidth = 1;
+    pctx.fill();
+    pctx.stroke();
+  }
+}
+
+function hideCalibrationPanel() {
+  calibrationPanel.style.display = 'none';
+  calibrationData = null;
+}
+
+async function loadCalibration(captureId) {
+  const res = await fetch(`/api/captures/${captureId}/calibration`);
+  const data = await res.json();
+  if (!data.available) {
+    hideCalibrationPanel();
+    return;
+  }
+  calibrationData = data;
+  calibrationPanel.style.display = 'block';
+  renderCalibration(data);
+}
+
+function renderCalibration(data) {
+  calibrationEce.textContent = `Expected Calibration Error (ECE): ${data.ece.toFixed(4)}`;
+
+  const svg = d3.select('#calibration-chart');
+  svg.selectAll('*').remove();
+  const width = +svg.attr('width');
+  const height = +svg.attr('height');
+  const margin = { top: 10, right: 20, bottom: 40, left: 50 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+
+  const x = d3.scaleLinear().domain([0, 1]).range([0, innerWidth]);
+  const y = d3.scaleLinear().domain([0, 1]).range([innerHeight, 0]);
+
+  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const bins = data.bin_confidence.map((conf, i) => ({
+    start: data.bin_edges[i],
+    end: data.bin_edges[i + 1],
+    confidence: conf,
+    accuracy: data.bin_accuracy[i],
+    count: data.bin_count[i],
+  })).filter(b => b.count > 0);
+
+  g.selectAll('rect')
+    .data(bins)
+    .enter()
+    .append('rect')
+    .attr('x', d => x(d.start))
+    .attr('width', d => Math.max(0, x(d.end) - x(d.start) - 1))
+    .attr('y', d => y(d.accuracy))
+    .attr('height', d => innerHeight - y(d.accuracy))
+    .attr('class', 'shap-bar-agg');
+
+  g.append('line')
+    .attr('x1', x(0)).attr('y1', y(0))
+    .attr('x2', x(1)).attr('y2', y(1))
+    .attr('stroke', '#999')
+    .attr('stroke-dasharray', '4,4');
+
+  g.append('g').attr('class', 'shap-axis')
+    .attr('transform', `translate(0,${innerHeight})`)
+    .call(d3.axisBottom(x).ticks(5));
+  g.append('g').attr('class', 'shap-axis').call(d3.axisLeft(y).ticks(5));
+
+  g.append('text')
+    .attr('x', innerWidth / 2).attr('y', innerHeight + 32)
+    .attr('text-anchor', 'middle').attr('font-size', 12)
+    .text('Confidence');
+  g.append('text')
+    .attr('transform', 'rotate(-90)')
+    .attr('x', -innerHeight / 2).attr('y', -35)
+    .attr('text-anchor', 'middle').attr('font-size', 12)
+    .text('Accuracy');
 }
 
 runSelect.addEventListener('change', e => loadCaptures(e.target.value));

@@ -11,6 +11,8 @@ from .hooks.activations import capture_activations, to_arrays as activations_to_
 from .methods.gradcam import compute_gradcam, has_conv_layers, to_arrays as gradcam_to_arrays
 from .methods.shap_explain import compute_shap, to_arrays as shap_to_arrays
 from .methods.lime_explain import compute_lime, to_arrays as lime_to_arrays
+from .methods.boundary import compute_boundary, to_arrays as boundary_to_arrays
+from .methods.calibration import compute_calibration, to_arrays as calibration_to_arrays
 
 
 def _now_iso():
@@ -68,9 +70,14 @@ class Session:
         return self._capture(
             step=None, model=model, inputs=inputs, labels=labels,
             include_shap=True, include_lime=True,
+            include_boundary=True, include_calibration=True,
         )
 
-    def _capture(self, step, model, inputs, labels=None, include_shap=False, include_lime=False):
+    def _capture(
+        self, step, model, inputs, labels=None,
+        include_shap=False, include_lime=False,
+        include_boundary=False, include_calibration=False,
+    ):
         framework = _detect_framework(model)
         if self.framework is None:
             self.framework = framework
@@ -96,6 +103,14 @@ class Session:
         if include_lime:
             lime_result = compute_lime(model, inputs)
             npz_payload.update(lime_to_arrays(lime_result))
+
+        if include_boundary:
+            boundary_result = compute_boundary(model, inputs, labels=labels)
+            npz_payload.update(boundary_to_arrays(boundary_result))
+
+        if include_calibration:
+            calibration_result = compute_calibration(model, inputs, labels)
+            npz_payload.update(calibration_to_arrays(calibration_result))
 
         capture_id = str(uuid.uuid4())
         npz_path = os.path.join(self.runs_dir, self.run_id, f"{capture_id}.npz")
