@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: lensnn
+Version: 0.1.0
+Summary: Explainability library: activations, Grad-CAM, SHAP, LIME, decision boundary, calibration — viewed through a local dashboard.
+Requires-Python: >=3.11
+Requires-Dist: torch
+Requires-Dist: captum
+Requires-Dist: shap
+Requires-Dist: lime
+Requires-Dist: scikit-learn
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: numpy
+Requires-Dist: pandas

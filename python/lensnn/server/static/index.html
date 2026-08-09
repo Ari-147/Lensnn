@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LensNN Viewer</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
+  h1 { margin-bottom: 0.25rem; }
+  h2 { margin-top: 2rem; font-size: 1.1rem; }
+  .controls { margin-bottom: 1.5rem; }
+  .controls label { margin-right: 1.5rem; }
+  select { padding: 0.25rem; min-width: 220px; }
+  table { border-collapse: collapse; width: 100%; max-width: 800px; }
+  th, td { border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left; }
+  th { background: #f4f4f4; }
+  #empty-msg { color: #666; }
+  #gradcam-panel { display: none; }
+  #gradcam-canvas {
+    width: 320px;
+    height: 320px;
+    image-rendering: pixelated;
+    border: 1px solid #ccc;
+  }
+  .gradcam-meta { color: #555; font-size: 0.9rem; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+<h1>LensNN</h1>
+<p id="empty-msg">Loading...</p>
+
+<div class="controls">
+  <label>Run:
+    <select id="run-select"></select>
+  </label>
+  <label>Capture:
+    <select id="capture-select"></select>
+  </label>
+</div>
+
+<h2>Activations</h2>
+<table>
+  <thead>
+    <tr><th>Layer</th><th>Shape</th><th>Mean</th><th>Std</th></tr>
+  </thead>
+  <tbody id="activations-body"></tbody>
+</table>
+
+<div id="gradcam-panel">
+  <h2>Grad-CAM</h2>
+  <label>Sample:
+    <select id="gradcam-sample-select"></select>
+  </label>
+  <div>
+    <canvas id="gradcam-canvas"></canvas>
+  </div>
+  <p class="gradcam-meta" id="gradcam-meta"></p>
+</div>
+
+<script>
+const runSelect = document.getElementById('run-select');
+const captureSelect = document.getElementById('capture-select');
+const activationsBody = document.getElementById('activations-body');
+const emptyMsg = document.getElementById('empty-msg');
+
+const gradcamPanel = document.getElementById('gradcam-panel');
+const gradcamSampleSelect = document.getElementById('gradcam-sample-select');
+const gradcamCanvas = document.getElementById('gradcam-canvas');
+const gradcamMeta = document.getElementById('gradcam-meta');
+let gradcamData = null;
+
+async function loadRuns() {
+  const res = await fetch('/api/runs');
+  const runs = await res.json();
+  runSelect.innerHTML = '';
+  if (!runs.length) {
+    emptyMsg.textContent = 'No runs found yet.';
+    return;
+  }
+  emptyMsg.textContent = '';
+  for (const run of runs) {
+    const opt = document.createElement('option');
+    opt.value = run.run_id;
+    opt.textContent = `${run.name} (${run.framework})`;
+    runSelect.appendChild(opt);
+  }
+  await loadCaptures(runs[0].run_id);
+}
+
+async function loadCaptures(runId) {
+  const res = await fetch(`/api/runs/${runId}/captures`);
+  const captures = await res.json();
+  captureSelect.innerHTML = '';
+  for (const capture of captures) {
+    const opt = document.createElement('option');
+    opt.value = capture.capture_id;
+    opt.textContent = capture.step === null
+      ? `explain @ ${capture.timestamp}`
+      : `epoch ${capture.step}`;
+    captureSelect.appendChild(opt);
+  }
+  if (captures.length) {
+    await loadCapture(captures[0].capture_id);
+  } else {
+    activationsBody.innerHTML = '';
+    hideGradcamPanel();
+  }
+}
+
+async function loadCapture(captureId) {
+  await Promise.all([
+    loadActivations(captureId),
+    loadGradcam(captureId),
+  ]);
+}
+
+async function loadActivations(captureId) {
+  const res = await fetch(`/api/captures/${captureId}/activations`);
+  const activations = await res.json();
+  activationsBody.innerHTML = '';
+  for (const [layer, stats] of Object.entries(activations)) {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${layer}</td>
+      <td>${stats.shape.join(' x ')}</td>
+      <td>${stats.mean.toFixed(4)}</td>
+      <td>${stats.std.toFixed(4)}</td>
+    `;
+    activationsBody.appendChild(row);
+  }
+}
+
+function hideGradcamPanel() {
+  gradcamPanel.style.display = 'none';
+  gradcamData = null;
+}
+
+async function loadGradcam(captureId) {
+  const res = await fetch(`/api/captures/${captureId}/gradcam`);
+  const data = await res.json();
+  if (!data.available || !data.heatmaps.length || !data.sample_inputs.length) {
+    hideGradcamPanel();
+    return;
+  }
+  gradcamData = data;
+  gradcamPanel.style.display = 'block';
+  gradcamMeta.textContent = `Layer: ${data.layer_name}`;
+
+  gradcamSampleSelect.innerHTML = '';
+  for (let i = 0; i < data.heatmaps.length; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `sample ${i}`;
+    gradcamSampleSelect.appendChild(opt);
+  }
+  renderGradcamSample(0);
+}
+
+function renderGradcamSample(idx) {
+  if (!gradcamData) return;
+  const image = gradcamData.sample_inputs[idx]; // [C][H][W]
+  const heatmap = gradcamData.heatmaps[idx];     // [H][W], values in [0, 1]
+  const numChannels = image.length;
+  const height = image[0].length;
+  const width = image[0][0].length;
+
+  gradcamCanvas.width = width;
+  gradcamCanvas.height = height;
+  const ctx = gradcamCanvas.getContext('2d');
+  const frame = ctx.createImageData(width, height);
+
+  let lo = Infinity, hi = -Infinity;
+  for (let c = 0; c < numChannels; c++) {
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const v = image[c][y][x];
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+    }
+  }
+  const range = (hi - lo) || 1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let base;
+      if (numChannels >= 3) {
+        base = [
+          (image[0][y][x] - lo) / range,
+          (image[1][y][x] - lo) / range,
+          (image[2][y][x] - lo) / range,
+        ];
+      } else {
+        const v = (image[0][y][x] - lo) / range;
+        base = [v, v, v];
+      }
+      const h = heatmap[y][x];
+      const pixelIdx = (y * width + x) * 4;
+      // Grad-CAM overlay: blend the heatmap in as a red-hot wash.
+      frame.data[pixelIdx]     = Math.min(255, base[0] * 255 * (1 - h) + 255 * h);
+      frame.data[pixelIdx + 1] = Math.min(255, base[1] * 255 * (1 - h));
+      frame.data[pixelIdx + 2] = Math.min(255, base[2] * 255 * (1 - h));
+      frame.data[pixelIdx + 3] = 255;
+    }
+  }
+  ctx.putImageData(frame, 0, 0);
+}
+
+runSelect.addEventListener('change', e => loadCaptures(e.target.value));
+captureSelect.addEventListener('change', e => loadCapture(e.target.value));
+gradcamSampleSelect.addEventListener('change', e => renderGradcamSample(parseInt(e.target.value, 10)));
+
+loadRuns();
+</script>
+</body>
+</html>
