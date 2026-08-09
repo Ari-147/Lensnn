@@ -10,6 +10,7 @@ from .storage import db
 from .hooks.activations import capture_activations, to_arrays as activations_to_arrays
 from .methods.gradcam import compute_gradcam, has_conv_layers, to_arrays as gradcam_to_arrays
 from .methods.shap_explain import compute_shap, to_arrays as shap_to_arrays
+from .methods.lime_explain import compute_lime, to_arrays as lime_to_arrays
 
 
 def _now_iso():
@@ -64,9 +65,12 @@ class Session:
         return self._capture(step=epoch, model=model, inputs=val_batch, labels=val_labels)
 
     def explain(self, model, inputs, labels=None):
-        return self._capture(step=None, model=model, inputs=inputs, labels=labels, include_shap=True)
+        return self._capture(
+            step=None, model=model, inputs=inputs, labels=labels,
+            include_shap=True, include_lime=True,
+        )
 
-    def _capture(self, step, model, inputs, labels=None, include_shap=False):
+    def _capture(self, step, model, inputs, labels=None, include_shap=False, include_lime=False):
         framework = _detect_framework(model)
         if self.framework is None:
             self.framework = framework
@@ -88,6 +92,10 @@ class Session:
         if include_shap:
             shap_result = compute_shap(model, inputs)
             npz_payload.update(shap_to_arrays(shap_result))
+
+        if include_lime:
+            lime_result = compute_lime(model, inputs)
+            npz_payload.update(lime_to_arrays(lime_result))
 
         capture_id = str(uuid.uuid4())
         npz_path = os.path.join(self.runs_dir, self.run_id, f"{capture_id}.npz")

@@ -28,6 +28,8 @@
   .shap-bar-neg { fill: #1f77b4; }
   .shap-bar-agg { fill: #4c78a8; }
   .shap-axis text { font-size: 11px; }
+  #lime-panel { display: none; }
+  #lime-panel h3 { font-size: 0.95rem; margin: 1rem 0 0.25rem; color: #444; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
@@ -79,6 +81,20 @@
   <svg id="shap-aggregate-chart" width="640" height="280"></svg>
 </div>
 
+<div id="lime-panel">
+  <h2>LIME</h2>
+  <div class="controls">
+    <label id="lime-class-label" style="display:none;">Class:
+      <select id="lime-class-select"></select>
+    </label>
+    <label>Sample:
+      <select id="lime-sample-select"></select>
+    </label>
+  </div>
+  <h3>Per-sample local explanation</h3>
+  <svg id="lime-sample-chart" width="640" height="280"></svg>
+</div>
+
 <script>
 const runSelect = document.getElementById('run-select');
 const captureSelect = document.getElementById('capture-select');
@@ -96,6 +112,12 @@ const shapClassLabel = document.getElementById('shap-class-label');
 const shapClassSelect = document.getElementById('shap-class-select');
 const shapSampleSelect = document.getElementById('shap-sample-select');
 let shapData = null;
+
+const limePanel = document.getElementById('lime-panel');
+const limeClassLabel = document.getElementById('lime-class-label');
+const limeClassSelect = document.getElementById('lime-class-select');
+const limeSampleSelect = document.getElementById('lime-sample-select');
+let limeData = null;
 
 async function loadRuns() {
   const res = await fetch('/api/runs');
@@ -133,6 +155,7 @@ async function loadCaptures(runId) {
     activationsBody.innerHTML = '';
     hideGradcamPanel();
     hideShapPanel();
+    hideLimePanel();
   }
 }
 
@@ -141,6 +164,7 @@ async function loadCapture(captureId) {
     loadActivations(captureId),
     loadGradcam(captureId),
     loadShap(captureId),
+    loadLime(captureId),
   ]);
 }
 
@@ -337,11 +361,69 @@ function renderBarChart(selector, data, diverging) {
     .call(d3.axisBottom(x).ticks(5));
 }
 
+function hideLimePanel() {
+  limePanel.style.display = 'none';
+  limeData = null;
+}
+
+async function loadLime(captureId) {
+  const res = await fetch(`/api/captures/${captureId}/lime`);
+  const data = await res.json();
+  if (!data.available || !data.values.length) {
+    hideLimePanel();
+    return;
+  }
+  limeData = data;
+  limePanel.style.display = 'block';
+
+  const hasClasses = data.shape.length === 3;
+  limeClassLabel.style.display = hasClasses ? 'inline' : 'none';
+  if (hasClasses) {
+    limeClassSelect.innerHTML = '';
+    for (let c = 0; c < data.shape[2]; c++) {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = `class ${c}`;
+      limeClassSelect.appendChild(opt);
+    }
+  }
+
+  limeSampleSelect.innerHTML = '';
+  for (let i = 0; i < data.shape[0]; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `sample ${i}`;
+    limeSampleSelect.appendChild(opt);
+  }
+
+  renderLime();
+}
+
+function limeValuesForClass(classIdx) {
+  // Same shape convention as shapValuesForClass: [N][F] or [N][F][C].
+  if (limeData.shape.length === 2) return limeData.values;
+  return limeData.values.map(sample => sample.map(featureRow => featureRow[classIdx]));
+}
+
+function renderLime() {
+  if (!limeData) return;
+  const classIdx = limeData.shape.length === 3 ? parseInt(limeClassSelect.value || 0, 10) : 0;
+  const values2d = limeValuesForClass(classIdx);
+  const sampleIdx = parseInt(limeSampleSelect.value || 0, 10);
+
+  // Reuses the same diverging bar chart as the SHAP per-sample panel so
+  // the two are visually comparable for the same sample.
+  const perSample = values2d[sampleIdx].map((value, i) => ({ feature: `f${i}`, value }));
+  renderBarChart('#lime-sample-chart', perSample, true);
+}
+
 runSelect.addEventListener('change', e => loadCaptures(e.target.value));
 captureSelect.addEventListener('change', e => loadCapture(e.target.value));
 gradcamSampleSelect.addEventListener('change', e => renderGradcamSample(parseInt(e.target.value, 10)));
 shapSampleSelect.addEventListener('change', renderShap);
 shapClassSelect.addEventListener('change', renderShap);
+limeSampleSelect.addEventListener('change', renderLime);
+limeClassSelect.addEventListener('change', renderLime);
 
 loadRuns();
 </script>

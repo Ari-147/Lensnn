@@ -12,6 +12,7 @@ from ..storage import db
 from ..hooks.activations import from_arrays as activations_from_arrays
 from ..methods.gradcam import from_arrays as gradcam_from_arrays
 from ..methods.shap_explain import from_arrays as shap_from_arrays
+from ..methods.lime_explain import from_arrays as lime_from_arrays
 
 app = FastAPI(title="LensNN Viewer")
 _state = {"runs_dir": config.RUNS_DIR}
@@ -88,6 +89,20 @@ def get_shap(capture_id: str):
     if "base_values" in result:
         response["base_values"] = result["base_values"].tolist()
     return response
+
+
+@app.get("/api/captures/{capture_id}/lime")
+def get_lime(capture_id: str):
+    capture = _get_capture_or_404(capture_id)
+    if not os.path.exists(capture["npz_path"]):
+        return {"available": False}
+
+    result = lime_from_arrays(_load_npz(capture["npz_path"]))
+    if result is None:
+        return {"available": False}
+
+    values = result["values"]
+    return {"available": True, "values": values.tolist(), "shape": list(values.shape)}
 
 
 _static_dir = Path(__file__).parent / "static"
