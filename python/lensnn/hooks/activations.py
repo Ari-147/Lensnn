@@ -1,9 +1,9 @@
-import os
-
 import numpy as np
 import torch
 
 from .. import config
+
+ACTIVATIONS_PREFIX = "activations"
 
 
 def capture_activations(model, input_batch):
@@ -37,26 +37,31 @@ def _summarize(tensor):
     return stats
 
 
-def save_activations(npz_path, activations):
-    dirname = os.path.dirname(npz_path)
-    if dirname:
-        os.makedirs(dirname, exist_ok=True)
+def to_arrays(activations):
+    """Serialize captured activations to a flat dict of arrays, namespaced
+    so they can be merged into a single capture .npz alongside other
+    methods' arrays."""
     payload = {}
     for layer, stats in activations.items():
-        payload[f"{layer}__mean"] = np.array(stats["mean"])
-        payload[f"{layer}__std"] = np.array(stats["std"])
-        payload[f"{layer}__shape"] = np.array(stats["shape"])
+        key = f"{ACTIVATIONS_PREFIX}/{layer}"
+        payload[f"{key}__mean"] = np.array(stats["mean"])
+        payload[f"{key}__std"] = np.array(stats["std"])
+        payload[f"{key}__shape"] = np.array(stats["shape"])
         if "full" in stats:
-            payload[f"{layer}__full"] = stats["full"]
-    np.savez_compressed(npz_path, **payload)
+            payload[f"{key}__full"] = stats["full"]
+    return payload
 
 
-def load_activations(npz_path):
-    data = np.load(npz_path, allow_pickle=False)
+def from_arrays(arrays):
+    """Inverse of to_arrays(). `arrays` is any dict-like mapping of
+    key -> ndarray (e.g. a loaded .npz)."""
+    prefix = f"{ACTIVATIONS_PREFIX}/"
     fields_by_layer = {}
-    for key in data.files:
-        layer, field = key.rsplit("__", 1)
-        fields_by_layer.setdefault(layer, {})[field] = data[key]
+    for key in arrays:
+        if not key.startswith(prefix):
+            continue
+        layer, field = key[len(prefix):].rsplit("__", 1)
+        fields_by_layer.setdefault(layer, {})[field] = arrays[key]
 
     result = {}
     for layer, fields in fields_by_layer.items():
