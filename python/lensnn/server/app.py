@@ -11,6 +11,7 @@ from .. import config
 from ..storage import db
 from ..hooks.activations import from_arrays as activations_from_arrays
 from ..methods.gradcam import from_arrays as gradcam_from_arrays
+from ..methods.shap_explain import from_arrays as shap_from_arrays
 
 app = FastAPI(title="LensNN Viewer")
 _state = {"runs_dir": config.RUNS_DIR}
@@ -70,6 +71,23 @@ def get_gradcam(capture_id: str):
         "heatmaps": result["heatmaps"].tolist(),
         "sample_inputs": result["sample_inputs"].tolist() if "sample_inputs" in result else [],
     }
+
+
+@app.get("/api/captures/{capture_id}/shap")
+def get_shap(capture_id: str):
+    capture = _get_capture_or_404(capture_id)
+    if not os.path.exists(capture["npz_path"]):
+        return {"available": False}
+
+    result = shap_from_arrays(_load_npz(capture["npz_path"]))
+    if result is None:
+        return {"available": False}
+
+    values = result["values"]
+    response = {"available": True, "values": values.tolist(), "shape": list(values.shape)}
+    if "base_values" in result:
+        response["base_values"] = result["base_values"].tolist()
+    return response
 
 
 _static_dir = Path(__file__).parent / "static"
