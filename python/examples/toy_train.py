@@ -1,11 +1,13 @@
 """Train a tiny PyTorch model, logging activations to LensNN each epoch,
-then run a final explain() pass (SHAP + activations) on a held-out batch.
+then run a final explain() pass (SHAP + LIME + activations) on a held-out
+batch.
 
 Run from python/:
     python examples/toy_train.py
     lensnn serve ./runs
 Then open http://127.0.0.1:8000 and pick the run to see per-epoch
-activation stats, plus the SHAP panel on the final "explain" capture.
+activation stats, plus the SHAP and LIME panels on the final "explain"
+capture.
 """
 import torch
 import torch.nn as nn

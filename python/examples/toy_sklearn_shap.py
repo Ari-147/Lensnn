@@ -1,13 +1,14 @@
 """Explain a small scikit-learn classifier on a toy tabular dataset with
 LensNN's session.explain(), demonstrating the sklearn-model path through
-SHAP (no PyTorch involved at all).
+SHAP and LIME (no PyTorch involved at all).
 
 Run from python/:
     python examples/toy_sklearn_shap.py
     lensnn serve ./runs
 Then open http://127.0.0.1:8000, pick the toy_sklearn_shap run's single
-"explain" capture, and check the SHAP panel: a per-sample bar chart with
-a class selector, plus an aggregate importance chart.
+"explain" capture, and compare the SHAP and LIME panels for the same
+sample: both show a per-sample feature-weight bar chart with a class
+selector, and should broadly agree on which features matter most.
 """
 from sklearn.datasets import load_iris
 from sklearn.ensemble import RandomForestClassifier
