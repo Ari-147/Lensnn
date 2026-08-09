@@ -22,7 +22,14 @@
     border: 1px solid #ccc;
   }
   .gradcam-meta { color: #555; font-size: 0.9rem; margin-top: 0.5rem; }
+  #shap-panel { display: none; }
+  #shap-panel h3 { font-size: 0.95rem; margin: 1rem 0 0.25rem; color: #444; }
+  .shap-bar-pos { fill: #d62728; }
+  .shap-bar-neg { fill: #1f77b4; }
+  .shap-bar-agg { fill: #4c78a8; }
+  .shap-axis text { font-size: 11px; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
 <body>
 <h1>LensNN</h1>
@@ -56,6 +63,22 @@
   <p class="gradcam-meta" id="gradcam-meta"></p>
 </div>
 
+<div id="shap-panel">
+  <h2>SHAP</h2>
+  <div class="controls">
+    <label id="shap-class-label" style="display:none;">Class:
+      <select id="shap-class-select"></select>
+    </label>
+    <label>Sample:
+      <select id="shap-sample-select"></select>
+    </label>
+  </div>
+  <h3>Per-sample feature attribution</h3>
+  <svg id="shap-sample-chart" width="640" height="280"></svg>
+  <h3>Aggregate feature importance (mean |SHAP value| across samples)</h3>
+  <svg id="shap-aggregate-chart" width="640" height="280"></svg>
+</div>
+
 <script>
 const runSelect = document.getElementById('run-select');
 const captureSelect = document.getElementById('capture-select');
@@ -67,6 +90,12 @@ const gradcamSampleSelect = document.getElementById('gradcam-sample-select');
 const gradcamCanvas = document.getElementById('gradcam-canvas');
 const gradcamMeta = document.getElementById('gradcam-meta');
 let gradcamData = null;
+
+const shapPanel = document.getElementById('shap-panel');
+const shapClassLabel = document.getElementById('shap-class-label');
+const shapClassSelect = document.getElementById('shap-class-select');
+const shapSampleSelect = document.getElementById('shap-sample-select');
+let shapData = null;
 
 async function loadRuns() {
   const res = await fetch('/api/runs');
@@ -103,6 +132,7 @@ async function loadCaptures(runId) {
   } else {
     activationsBody.innerHTML = '';
     hideGradcamPanel();
+    hideShapPanel();
   }
 }
 
@@ -110,6 +140,7 @@ async function loadCapture(captureId) {
   await Promise.all([
     loadActivations(captureId),
     loadGradcam(captureId),
+    loadShap(captureId),
   ]);
 }
 
@@ -205,9 +236,112 @@ function renderGradcamSample(idx) {
   ctx.putImageData(frame, 0, 0);
 }
 
+function hideShapPanel() {
+  shapPanel.style.display = 'none';
+  shapData = null;
+}
+
+async function loadShap(captureId) {
+  const res = await fetch(`/api/captures/${captureId}/shap`);
+  const data = await res.json();
+  if (!data.available || !data.values.length) {
+    hideShapPanel();
+    return;
+  }
+  shapData = data;
+  shapPanel.style.display = 'block';
+
+  const hasClasses = data.shape.length === 3;
+  shapClassLabel.style.display = hasClasses ? 'inline' : 'none';
+  if (hasClasses) {
+    shapClassSelect.innerHTML = '';
+    for (let c = 0; c < data.shape[2]; c++) {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = `class ${c}`;
+      shapClassSelect.appendChild(opt);
+    }
+  }
+
+  shapSampleSelect.innerHTML = '';
+  for (let i = 0; i < data.shape[0]; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `sample ${i}`;
+    shapSampleSelect.appendChild(opt);
+  }
+
+  renderShap();
+}
+
+function shapValuesForClass(classIdx) {
+  // Always returns a 2D [N][F] array, slicing out a class if the
+  // underlying values are [N][F][C] (multi-output predict_fn).
+  if (shapData.shape.length === 2) return shapData.values;
+  return shapData.values.map(sample => sample.map(featureRow => featureRow[classIdx]));
+}
+
+function renderShap() {
+  if (!shapData) return;
+  const classIdx = shapData.shape.length === 3 ? parseInt(shapClassSelect.value || 0, 10) : 0;
+  const values2d = shapValuesForClass(classIdx);
+  const sampleIdx = parseInt(shapSampleSelect.value || 0, 10);
+
+  const perSample = values2d[sampleIdx].map((value, i) => ({ feature: `f${i}`, value }));
+  renderBarChart('#shap-sample-chart', perSample, true);
+
+  const numFeatures = values2d[0].length;
+  const agg = new Array(numFeatures).fill(0);
+  for (const row of values2d) {
+    for (let i = 0; i < numFeatures; i++) agg[i] += Math.abs(row[i]);
+  }
+  const aggregate = agg.map((sum, i) => ({ feature: `f${i}`, value: sum / values2d.length }));
+  renderBarChart('#shap-aggregate-chart', aggregate, false);
+}
+
+function renderBarChart(selector, data, diverging) {
+  const svg = d3.select(selector);
+  svg.selectAll('*').remove();
+  const width = +svg.attr('width');
+  const height = +svg.attr('height');
+  const margin = { top: 10, right: 20, bottom: 30, left: 50 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+
+  const y = d3.scaleBand()
+    .domain(data.map(d => d.feature))
+    .range([0, innerHeight])
+    .padding(0.2);
+
+  const maxAbs = d3.max(data, d => Math.abs(d.value)) || 1;
+  const x = diverging
+    ? d3.scaleLinear().domain([-maxAbs, maxAbs]).range([0, innerWidth])
+    : d3.scaleLinear().domain([0, maxAbs]).range([0, innerWidth]);
+
+  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  g.selectAll('rect')
+    .data(data)
+    .enter()
+    .append('rect')
+    .attr('y', d => y(d.feature))
+    .attr('height', y.bandwidth())
+    .attr('x', d => diverging ? x(Math.min(0, d.value)) : 0)
+    .attr('width', d => diverging ? Math.abs(x(d.value) - x(0)) : x(d.value))
+    .attr('class', d => diverging ? (d.value >= 0 ? 'shap-bar-pos' : 'shap-bar-neg') : 'shap-bar-agg');
+
+  g.append('g').attr('class', 'shap-axis').call(d3.axisLeft(y));
+  g.append('g')
+    .attr('class', 'shap-axis')
+    .attr('transform', `translate(0,${innerHeight})`)
+    .call(d3.axisBottom(x).ticks(5));
+}
+
 runSelect.addEventListener('change', e => loadCaptures(e.target.value));
 captureSelect.addEventListener('change', e => loadCapture(e.target.value));
 gradcamSampleSelect.addEventListener('change', e => renderGradcamSample(parseInt(e.target.value, 10)));
+shapSampleSelect.addEventListener('change', renderShap);
+shapClassSelect.addEventListener('change', renderShap);
 
 loadRuns();
 </script>
