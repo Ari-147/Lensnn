@@ -33,6 +33,15 @@ def _load_npz(npz_path):
         return {key: npz[key] for key in npz.files}
 
 
+def _npz_prefixes(npz_path):
+    """Cheap check of which method namespaces a capture's .npz contains,
+    without decompressing any array payloads (just the zip directory
+    listing) — used to decide which tabs to show without pulling data."""
+    with np.load(npz_path, allow_pickle=False) as npz:
+        keys = npz.files
+    return {key.split("/", 1)[0] for key in keys if "/" in key}
+
+
 def _get_capture_or_404(capture_id):
     capture = db.get_capture(_db_path(), capture_id)
     if capture is None:
@@ -46,8 +55,22 @@ def get_runs():
 
 
 @app.get("/api/runs/{run_id}/captures")
-def get_captures(run_id: str):
-    return db.list_captures(_db_path(), run_id)
+def get_captures(run_id: str, limit: int | None = None, offset: int = 0):
+    if limit is None:
+        limit = config.CAPTURES_PAGE_SIZE
+    captures = db.list_captures(_db_path(), run_id, limit=limit, offset=offset)
+    total = db.count_captures(_db_path(), run_id)
+    return {"captures": captures, "total": total, "offset": offset, "limit": limit}
+
+
+@app.get("/api/captures/{capture_id}/panels")
+def get_available_panels(capture_id: str):
+    capture = _get_capture_or_404(capture_id)
+    panel_names = ("activations", "gradcam", "shap", "lime", "boundary", "calibration")
+    if not os.path.exists(capture["npz_path"]):
+        return {name: False for name in panel_names}
+    prefixes = _npz_prefixes(capture["npz_path"])
+    return {name: name in prefixes for name in panel_names}
 
 
 @app.get("/api/captures/{capture_id}/activations")

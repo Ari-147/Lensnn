@@ -30,6 +30,15 @@ def _wrap_torch(model):
         tensor = x if isinstance(x, torch.Tensor) else torch.as_tensor(np.asarray(x), dtype=torch.float32)
         with torch.no_grad():
             out = model(tensor)
+        if out.dim() == 2 and out.shape[1] > 1:
+            # Multi-class output: assume raw logits (the standard PyTorch
+            # convention, since nn.CrossEntropyLoss expects logits) and
+            # normalize to probabilities. SHAP, LIME, boundary, and
+            # calibration all treat predict_fn's output as a probability
+            # distribution (LIME enforces rows summing to 1; calibration's
+            # confidence is meaningless otherwise). Single-output models
+            # (regression, or shape [N, 1]) are left untouched.
+            out = torch.softmax(out, dim=1)
         return out.detach().cpu().numpy()
 
     return predict

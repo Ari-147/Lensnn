@@ -85,13 +85,25 @@ def list_runs(db_path):
     return [dict(row) for row in rows]
 
 
-def list_captures(db_path, run_id):
+def list_captures(db_path, run_id, limit=None, offset=0):
     conn = get_connection(db_path)
-    rows = conn.execute(
-        "SELECT * FROM captures WHERE run_id = ? ORDER BY timestamp", (run_id,)
-    ).fetchall()
+    query = "SELECT * FROM captures WHERE run_id = ? ORDER BY timestamp DESC"
+    params = [run_id]
+    if limit is not None:
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+    rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def count_captures(db_path, run_id):
+    conn = get_connection(db_path)
+    row = conn.execute(
+        "SELECT COUNT(*) AS c FROM captures WHERE run_id = ?", (run_id,)
+    ).fetchone()
+    conn.close()
+    return row["c"]
 
 
 def get_capture(db_path, capture_id):
