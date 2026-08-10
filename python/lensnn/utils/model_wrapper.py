@@ -36,8 +36,7 @@ def _wrap_torch(model):
             # normalize to probabilities. SHAP, LIME, boundary, and
             # calibration all treat predict_fn's output as a probability
             # distribution (LIME enforces rows summing to 1; calibration's
-            # confidence is meaningless otherwise). Single-output models
-            # (regression, or shape [N, 1]) are left untouched.
+            # confidence is meaningless otherwise).
             out = torch.softmax(out, dim=1)
         return out.detach().cpu().numpy()
 
