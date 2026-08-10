@@ -1,18 +1,50 @@
 {
   "name": "lensnn",
   "displayName": "LensNN",
+  "publisher": "lensnn",
   "description": "Embeds the LensNN local viewer dashboard in a VS Code editor panel.",
   "version": "0.1.0",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": [
-    "Other"
-  ],
   "main": "./out/extension.js",
-  "contributes": {
-    "commands": []
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -p ./ -w"
   },
-  "scripts": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.5.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "lensnn.openDashboard",
+        "title": "LensNN: Open Dashboard",
+        "category": "LensNN"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "LensNN",
+      "properties": {
+        "lensnn.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Python executable path used to launch the LensNN backend server."
+        },
+        "lensnn.runsDirectory": {
+          "type": "string",
+          "default": "./runs",
+          "description": "Path to the LensNN runs directory relative to the workspace root."
+        },
+        "lensnn.portRange": {
+          "type": "string",
+          "default": "8700-8799",
+          "description": "Local port range used to launch the LensNN backend server."
+        }
+      }
+    }
+  }
 }
