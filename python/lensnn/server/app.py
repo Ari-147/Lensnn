@@ -173,6 +173,11 @@ def get_calibration(capture_id: str):
     }
 
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
 _static_dir = Path(__file__).parent / "static"
 app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
 

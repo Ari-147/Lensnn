@@ -4,18 +4,28 @@
   "publisher": "lensnn",
   "description": "Embeds the LensNN local viewer dashboard in a VS Code editor panel.",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://example.com/lensnn.git"
+  },
+  "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
   },
   "main": "./out/extension.js",
+  "activationEvents": [
+    "onCommand:lensnn.openDashboard"
+  ],
   "scripts": {
     "compile": "tsc -p ./",
-    "watch": "tsc -p ./ -w"
+    "watch": "tsc -p ./ -w",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.85.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vsce": "^2.0.0"
   },
   "contributes": {
     "commands": [

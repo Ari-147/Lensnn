@@ -4,11 +4,22 @@ Embeds the LensNN local viewer dashboard in a VS Code editor panel.
 
 ## Local development
 
-1. Open the `vscode-extension` folder in VS Code.
-2. Run `npm install` to install the extension dev dependencies.
-3. Press `F5` to launch the Extension Development Host.
+1. Open the repository root (`LensNN`) in VS Code.
+2. Run `npm install` in the `vscode-extension` folder if needed.
+3. Open the Run and Debug view and select `Run LensNN Extension`.
+4. Press `F5` to launch the Extension Development Host.
+5. In the Extension Development Host, open the command palette and run `LensNN: Open Dashboard`.
+6. Confirm the LensNN dashboard loads in the webview.
+
+## Packaging
+
+1. From the `vscode-extension` folder, run `npm install` if needed, then `npm run package`.
+2. The packaged file is `lensnn-0.1.0.vsix` by default.
+3. Install locally in a regular VS Code window with:
+
+   `code --install-extension lensnn-0.1.0.vsix`
+
 4. Open the command palette and run `LensNN: Open Dashboard`.
-5. Confirm the placeholder message appears.
 
 ## Extension settings
 
