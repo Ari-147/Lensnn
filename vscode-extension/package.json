@@ -9,6 +9,9 @@
     "url": "https://example.com/lensnn.git"
   },
   "license": "MIT",
+  "categories": [
+    "Other"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -41,8 +44,8 @@
       "properties": {
         "lensnn.pythonPath": {
           "type": "string",
-          "default": "python",
-          "description": "Python executable path used to launch the LensNN backend server."
+          "default": "",
+          "description": "Python executable used to launch the LensNN backend server. Leave empty to auto-detect: a virtualenv in the workspace (.venv, venv, python/.venv, python/venv), then the interpreter selected in the Python extension, then python3/python on PATH."
         },
         "lensnn.runsDirectory": {
           "type": "string",

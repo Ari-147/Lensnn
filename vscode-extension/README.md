@@ -4,7 +4,9 @@ Embeds the LensNN local viewer dashboard in a VS Code editor panel.
 
 ## Local development
 
-1. Open the repository root (`LensNN`) in VS Code.
+1. Open the `vscode-extension` folder itself in VS Code (not the repository
+   root) — the debug configuration in `.vscode/launch.json` is only
+   discovered when this folder is the opened workspace root.
 2. Run `npm install` in the `vscode-extension` folder if needed.
 3. Open the Run and Debug view and select `Run LensNN Extension`.
 4. Press `F5` to launch the Extension Development Host.

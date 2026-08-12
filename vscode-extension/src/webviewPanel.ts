@@ -1,14 +1,25 @@
 import * as vscode from 'vscode';
 import { startLensnnServer, stopLensnnServer } from './serverManager';
 
-export async function createLensnnWebviewPanel(
+let currentPanel: vscode.WebviewPanel | undefined;
+
+export async function showLensnnWebviewPanel(
   context: vscode.ExtensionContext,
-  pythonPath: string,
+  configuredPythonPath: string,
+  workspaceFolder: string | undefined,
   runsDirectory: string,
   portRange: string,
   statusBarItem: vscode.StatusBarItem,
 ) {
-  const { port } = await startLensnnServer(pythonPath, runsDirectory, portRange);
+  // Re-running the command should surface the existing dashboard, not
+  // spawn a second server and orphan the first panel's server out from
+  // under it.
+  if (currentPanel) {
+    currentPanel.reveal(vscode.ViewColumn.One);
+    return;
+  }
+
+  const { port } = await startLensnnServer(configuredPythonPath, workspaceFolder, runsDirectory, portRange);
   const origin = `http://127.0.0.1:${port}`;
   const panel = vscode.window.createWebviewPanel(
     'lensnnDashboard',
@@ -21,8 +32,10 @@ export async function createLensnnWebviewPanel(
   );
 
   panel.webview.html = getWebviewHtml(origin);
+  currentPanel = panel;
 
   panel.onDidDispose(() => {
+    currentPanel = undefined;
     stopLensnnServer();
     statusBarItem.text = 'LensNN: Stopped';
     statusBarItem.show();

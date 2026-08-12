@@ -58,7 +58,7 @@ function activate(context) {
         statusBarItem.text = 'LensNN: Starting...';
         statusBarItem.show();
         try {
-            await (0, webviewPanel_1.createLensnnWebviewPanel)(context, pythonPath, runsDirectory, portRange, statusBarItem);
+            await (0, webviewPanel_1.showLensnnWebviewPanel)(context, pythonPath, runsDirectory, portRange, statusBarItem);
             statusBarItem.text = 'LensNN: Running';
             statusBarItem.show();
         }
