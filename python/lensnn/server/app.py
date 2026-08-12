@@ -13,6 +13,8 @@ from ..hooks.activations import from_arrays as activations_from_arrays
 from ..methods.gradcam import from_arrays as gradcam_from_arrays
 from ..methods.shap_explain import from_arrays as shap_from_arrays
 from ..methods.lime_explain import from_arrays as lime_from_arrays
+from ..methods.boundary import from_arrays as boundary_from_arrays
+from ..methods.calibration import from_arrays as calibration_from_arrays
 
 app = FastAPI(title="LensNN Viewer")
 _state = {"runs_dir": config.RUNS_DIR}
@@ -31,6 +33,15 @@ def _load_npz(npz_path):
         return {key: npz[key] for key in npz.files}
 
 
+def _npz_prefixes(npz_path):
+    """Cheap check of which method namespaces a capture's .npz contains,
+    without decompressing any array payloads (just the zip directory
+    listing) — used to decide which tabs to show without pulling data."""
+    with np.load(npz_path, allow_pickle=False) as npz:
+        keys = npz.files
+    return {key.split("/", 1)[0] for key in keys if "/" in key}
+
+
 def _get_capture_or_404(capture_id):
     capture = db.get_capture(_db_path(), capture_id)
     if capture is None:
@@ -44,8 +55,22 @@ def get_runs():
 
 
 @app.get("/api/runs/{run_id}/captures")
-def get_captures(run_id: str):
-    return db.list_captures(_db_path(), run_id)
+def get_captures(run_id: str, limit: int | None = None, offset: int = 0):
+    if limit is None:
+        limit = config.CAPTURES_PAGE_SIZE
+    captures = db.list_captures(_db_path(), run_id, limit=limit, offset=offset)
+    total = db.count_captures(_db_path(), run_id)
+    return {"captures": captures, "total": total, "offset": offset, "limit": limit}
+
+
+@app.get("/api/captures/{capture_id}/panels")
+def get_available_panels(capture_id: str):
+    capture = _get_capture_or_404(capture_id)
+    panel_names = ("activations", "gradcam", "shap", "lime", "boundary", "calibration")
+    if not os.path.exists(capture["npz_path"]):
+        return {name: False for name in panel_names}
+    prefixes = _npz_prefixes(capture["npz_path"])
+    return {name: name in prefixes for name in panel_names}
 
 
 @app.get("/api/captures/{capture_id}/activations")
@@ -103,6 +128,54 @@ def get_lime(capture_id: str):
 
     values = result["values"]
     return {"available": True, "values": values.tolist(), "shape": list(values.shape)}
+
+
+@app.get("/api/captures/{capture_id}/boundary")
+def get_boundary(capture_id: str):
+    capture = _get_capture_or_404(capture_id)
+    if not os.path.exists(capture["npz_path"]):
+        return {"available": False}
+
+    result = boundary_from_arrays(_load_npz(capture["npz_path"]))
+    if result is None:
+        return {"available": False}
+
+    response = {
+        "available": True,
+        "grid_x": result["grid_x"].tolist(),
+        "grid_y": result["grid_y"].tolist(),
+        "grid_values": result["grid_values"].tolist(),
+        "points_2d": result["points_2d"].tolist(),
+        "point_pred_values": result["point_pred_values"].tolist(),
+    }
+    if "point_true_values" in result:
+        response["point_true_values"] = result["point_true_values"].tolist()
+    return response
+
+
+@app.get("/api/captures/{capture_id}/calibration")
+def get_calibration(capture_id: str):
+    capture = _get_capture_or_404(capture_id)
+    if not os.path.exists(capture["npz_path"]):
+        return {"available": False}
+
+    result = calibration_from_arrays(_load_npz(capture["npz_path"]))
+    if result is None:
+        return {"available": False}
+
+    return {
+        "available": True,
+        "bin_edges": result["bin_edges"].tolist(),
+        "bin_confidence": result["bin_confidence"].tolist(),
+        "bin_accuracy": result["bin_accuracy"].tolist(),
+        "bin_count": result["bin_count"].tolist(),
+        "ece": result["ece"],
+    }
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
 
 
 _static_dir = Path(__file__).parent / "static"

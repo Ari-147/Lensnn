@@ -4,120 +4,445 @@
 <meta charset="utf-8">
 <title>LensNN Viewer</title>
 <style>
-  body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
-  h1 { margin-bottom: 0.25rem; }
-  h2 { margin-top: 2rem; font-size: 1.1rem; }
-  .controls { margin-bottom: 1.5rem; }
-  .controls label { margin-right: 1.5rem; }
-  select { padding: 0.25rem; min-width: 220px; }
-  table { border-collapse: collapse; width: 100%; max-width: 800px; }
-  th, td { border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left; }
-  th { background: #f4f4f4; }
-  #empty-msg { color: #666; }
-  #gradcam-panel { display: none; }
+  :root {
+    --bg: #12151b;
+    --bg-raised: #171b22;
+    --surface: #1b1f27;
+    --surface-2: #20242d;
+    --border: #2a2f3a;
+    --border-strong: #3a4150;
+    --text: #e6e9ef;
+    --text-muted: #8a93a6;
+    --text-faint: #5b6473;
+    --accent: #6fd3c7;
+    --accent-strong: #8fe1d7;
+    --accent-dim: rgba(111, 211, 199, 0.14);
+    --warn: #d7a350;
+    --warn-bg: rgba(215, 163, 80, 0.10);
+    --warn-border: rgba(215, 163, 80, 0.35);
+    --pos: #e0645f;
+    --neg: #5b8fd1;
+    --radius: 3px;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  body { margin: 0; }
+
+  ::selection { background: var(--accent-dim); color: var(--text); }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  a { color: var(--accent); }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 1.75rem 2rem 4rem;
+  }
+
+  /* ---------- Header ---------- */
+  .app-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.65rem;
+    padding-bottom: 1.1rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3rem;
+    height: 1.3rem;
+    border: 1.5px solid var(--accent);
+    border-radius: 50%;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .brand-mark::after {
+    content: "";
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  h1 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  .brand-tagline {
+    margin: 0;
+    color: var(--text-faint);
+    font-size: 0.8rem;
+  }
+
+  /* ---------- Toolbar ---------- */
+  .controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .toolbar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 1rem;
+  }
+  .controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+  }
+
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--surface-2) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M0 0l5 6 5-6z" fill="%238a93a6"/></svg>') no-repeat right 0.6rem center;
+    background-size: 10px 6px;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 0.4rem 1.6rem 0.4rem 0.6rem;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    min-width: 220px;
+    cursor: pointer;
+  }
+  select:hover { border-color: var(--accent); }
+  select:focus-visible { border-color: var(--accent); }
+
+  button {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 0.42rem 0.9rem;
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent-strong); }
+
+  #empty-msg { color: var(--text-muted); font-size: 0.85rem; }
+  #empty-msg:empty { display: none; }
+
+  /* ---------- Tab bar ---------- */
+  .tab-bar {
+    display: flex;
+    gap: 0.25rem;
+    margin: 0 0 0;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .tab-button {
+    padding: 0.55rem 0.95rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 0.83rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: -1px;
+  }
+  .tab-button:hover { color: var(--text); }
+  .tab-button.active { color: var(--accent-strong); border-bottom-color: var(--accent); font-weight: 600; }
+
+  .tab-content { padding-top: 0.25rem; }
+  .tab-panel { display: none; padding: 1.25rem 0 0.5rem; }
+  .tab-loading {
+    color: var(--text-faint);
+    font-size: 0.82rem;
+    font-family: var(--mono);
+    padding: 0.5rem 0 1rem;
+  }
+
+  h3 {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin: 1.4rem 0 0.6rem;
+  }
+  .tab-panel > h3:first-child { margin-top: 0; }
+
+  /* ---------- Table (activations) ---------- */
+  table { border-collapse: collapse; width: 100%; max-width: 760px; }
+  th, td {
+    border-bottom: 1px solid var(--border);
+    padding: 0.5rem 0.7rem;
+    text-align: left;
+    font-size: 0.83rem;
+  }
+  th {
+    color: var(--text-faint);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-strong);
+  }
+  td:nth-child(n+2) { font-family: var(--mono); color: var(--text-muted); }
+  tbody tr:hover { background: var(--surface); }
+
+  /* ---------- Viewfinder (signature framing for image/canvas panels) ---------- */
+  .viewfinder, .boundary-canvas-wrap {
+    position: relative;
+    display: inline-block;
+    padding: 10px;
+  }
+  .viewfinder::before, .viewfinder::after,
+  .boundary-canvas-wrap::before, .boundary-canvas-wrap::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-color: var(--accent);
+    opacity: 0.75;
+  }
+  .viewfinder::before, .boundary-canvas-wrap::before {
+    top: 0; left: 0;
+    border-top: 1.5px solid var(--accent);
+    border-left: 1.5px solid var(--accent);
+  }
+  .viewfinder::after, .boundary-canvas-wrap::after {
+    top: 0; right: 0;
+    border-top: 1.5px solid var(--accent);
+    border-right: 1.5px solid var(--accent);
+  }
+  .viewfinder span.vf-bl, .viewfinder span.vf-br,
+  .boundary-canvas-wrap span.vf-bl, .boundary-canvas-wrap span.vf-br { display: none; }
+
   #gradcam-canvas {
     width: 320px;
     height: 320px;
     image-rendering: pixelated;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border);
+    display: block;
   }
-  .gradcam-meta { color: #555; font-size: 0.9rem; margin-top: 0.5rem; }
-  #shap-panel { display: none; }
-  #shap-panel h3 { font-size: 0.95rem; margin: 1rem 0 0.25rem; color: #444; }
-  .shap-bar-pos { fill: #d62728; }
-  .shap-bar-neg { fill: #1f77b4; }
-  .shap-bar-agg { fill: #4c78a8; }
-  .shap-axis text { font-size: 11px; }
-  #lime-panel { display: none; }
-  #lime-panel h3 { font-size: 0.95rem; margin: 1rem 0 0.25rem; color: #444; }
+  .gradcam-meta { color: var(--text-muted); font-family: var(--mono); font-size: 0.78rem; margin-top: 0.6rem; }
+
+  /* ---------- SHAP / LIME bars ---------- */
+  .shap-bar-pos { fill: var(--pos); }
+  .shap-bar-neg { fill: var(--neg); }
+  .shap-bar-agg { fill: var(--accent); }
+  .shap-axis text { font-size: 10.5px; fill: var(--text-muted); font-family: var(--mono); }
+  .shap-axis .domain { stroke: var(--border-strong); }
+  .shap-axis .tick line { stroke: var(--border); }
+
+  /* ---------- Approximation caveat ---------- */
+  .approx-caveat {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    color: var(--warn);
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--radius);
+    font-size: 0.8rem;
+    max-width: 640px;
+    margin: 0 0 1rem;
+  }
+
+  .boundary-canvas-wrap { width: 420px; height: 420px; }
+  .boundary-canvas-wrap canvas {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 400px;
+    height: 400px;
+  }
+  #boundary-grid-canvas { image-rendering: pixelated; border: 1px solid var(--border); }
+
+  #calibration-ece {
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 0.75rem;
+  }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
 <body>
-<h1>LensNN</h1>
-<p id="empty-msg">Loading...</p>
+<div class="shell">
 
-<div class="controls">
+<header class="app-header">
+  <span class="brand-mark" aria-hidden="true"></span>
+  <div>
+    <h1>LensNN</h1>
+  </div>
+  <p class="brand-tagline" style="margin-left:auto;">local explainability viewer</p>
+</header>
+
+<div class="controls toolbar">
   <label>Run:
     <select id="run-select"></select>
   </label>
   <label>Capture:
     <select id="capture-select"></select>
   </label>
+  <button id="load-more-captures" style="display:none;">Load more captures</button>
 </div>
+<p id="empty-msg"></p>
 
-<h2>Activations</h2>
-<table>
-  <thead>
-    <tr><th>Layer</th><th>Shape</th><th>Mean</th><th>Std</th></tr>
-  </thead>
-  <tbody id="activations-body"></tbody>
-</table>
+<div id="tab-bar" class="tab-bar"></div>
 
-<div id="gradcam-panel">
-  <h2>Grad-CAM</h2>
-  <label>Sample:
-    <select id="gradcam-sample-select"></select>
-  </label>
-  <div>
-    <canvas id="gradcam-canvas"></canvas>
+<div id="tab-content">
+  <div id="panel-activations" class="tab-panel">
+    <table>
+      <thead>
+        <tr><th>Layer</th><th>Shape</th><th>Mean</th><th>Std</th></tr>
+      </thead>
+      <tbody id="activations-body"></tbody>
+    </table>
   </div>
-  <p class="gradcam-meta" id="gradcam-meta"></p>
-</div>
 
-<div id="shap-panel">
-  <h2>SHAP</h2>
-  <div class="controls">
-    <label id="shap-class-label" style="display:none;">Class:
-      <select id="shap-class-select"></select>
-    </label>
+  <div id="panel-gradcam" class="tab-panel">
     <label>Sample:
-      <select id="shap-sample-select"></select>
+      <select id="gradcam-sample-select"></select>
     </label>
+    <div class="viewfinder">
+      <canvas id="gradcam-canvas"></canvas>
+    </div>
+    <p class="gradcam-meta" id="gradcam-meta"></p>
   </div>
-  <h3>Per-sample feature attribution</h3>
-  <svg id="shap-sample-chart" width="640" height="280"></svg>
-  <h3>Aggregate feature importance (mean |SHAP value| across samples)</h3>
-  <svg id="shap-aggregate-chart" width="640" height="280"></svg>
+
+  <div id="panel-shap" class="tab-panel">
+    <div class="controls">
+      <label id="shap-class-label" style="display:none;">Class:
+        <select id="shap-class-select"></select>
+      </label>
+      <label>Sample:
+        <select id="shap-sample-select"></select>
+      </label>
+    </div>
+    <h3>Per-sample feature attribution</h3>
+    <svg id="shap-sample-chart" width="640" height="280"></svg>
+    <h3>Aggregate feature importance (mean |SHAP value| across samples)</h3>
+    <svg id="shap-aggregate-chart" width="640" height="280"></svg>
+  </div>
+
+  <div id="panel-lime" class="tab-panel">
+    <div class="controls">
+      <label id="lime-class-label" style="display:none;">Class:
+        <select id="lime-class-select"></select>
+      </label>
+      <label>Sample:
+        <select id="lime-sample-select"></select>
+      </label>
+    </div>
+    <h3>Per-sample local explanation</h3>
+    <svg id="lime-sample-chart" width="640" height="280"></svg>
+  </div>
+
+  <div id="panel-boundary" class="tab-panel">
+    <p class="approx-caveat">
+      This is a 2D PCA projection of the model's decision regions, not
+      the true boundary in the original feature space — an approximation
+      for visualization only.
+    </p>
+    <div class="boundary-canvas-wrap">
+      <canvas id="boundary-grid-canvas"></canvas>
+      <canvas id="boundary-points-canvas"></canvas>
+    </div>
+  </div>
+
+  <div id="panel-calibration" class="tab-panel">
+    <p id="calibration-ece"></p>
+    <svg id="calibration-chart" width="420" height="420"></svg>
+  </div>
 </div>
 
-<div id="lime-panel">
-  <h2>LIME</h2>
-  <div class="controls">
-    <label id="lime-class-label" style="display:none;">Class:
-      <select id="lime-class-select"></select>
-    </label>
-    <label>Sample:
-      <select id="lime-sample-select"></select>
-    </label>
-  </div>
-  <h3>Per-sample local explanation</h3>
-  <svg id="lime-sample-chart" width="640" height="280"></svg>
 </div>
 
 <script>
 const runSelect = document.getElementById('run-select');
 const captureSelect = document.getElementById('capture-select');
-const activationsBody = document.getElementById('activations-body');
+const loadMoreBtn = document.getElementById('load-more-captures');
 const emptyMsg = document.getElementById('empty-msg');
+const tabBar = document.getElementById('tab-bar');
 
-const gradcamPanel = document.getElementById('gradcam-panel');
 const gradcamSampleSelect = document.getElementById('gradcam-sample-select');
 const gradcamCanvas = document.getElementById('gradcam-canvas');
 const gradcamMeta = document.getElementById('gradcam-meta');
-let gradcamData = null;
+let currentGradcamData = null;
 
-const shapPanel = document.getElementById('shap-panel');
 const shapClassLabel = document.getElementById('shap-class-label');
 const shapClassSelect = document.getElementById('shap-class-select');
 const shapSampleSelect = document.getElementById('shap-sample-select');
-let shapData = null;
+let currentShapData = null;
 
-const limePanel = document.getElementById('lime-panel');
 const limeClassLabel = document.getElementById('lime-class-label');
 const limeClassSelect = document.getElementById('lime-class-select');
 const limeSampleSelect = document.getElementById('lime-sample-select');
-let limeData = null;
+let currentLimeData = null;
+
+const calibrationEce = document.getElementById('calibration-ece');
+
+const TABS = [
+  { id: 'activations', label: 'Activations' },
+  { id: 'gradcam', label: 'Grad-CAM' },
+  { id: 'shap', label: 'SHAP' },
+  { id: 'lime', label: 'LIME' },
+  { id: 'boundary', label: 'Decision Boundary' },
+  { id: 'calibration', label: 'Calibration' },
+];
+
+const TAB_ENDPOINTS = {
+  activations: id => `/api/captures/${id}/activations`,
+  gradcam: id => `/api/captures/${id}/gradcam`,
+  shap: id => `/api/captures/${id}/shap`,
+  lime: id => `/api/captures/${id}/lime`,
+  boundary: id => `/api/captures/${id}/boundary`,
+  calibration: id => `/api/captures/${id}/calibration`,
+};
+
+let currentRunId = null;
+let currentCaptureId = null;
+let captureOffset = 0;
+let captureTotal = 0;
+let availablePanels = {};
+let activeTab = null;
+// Per-capture, per-tab response cache so switching between captures/tabs
+// that were already visited doesn't re-fetch or re-decompress .npz data.
+const tabDataCache = {};
 
 async function loadRuns() {
   const res = await fetch('/api/runs');
@@ -127,51 +452,142 @@ async function loadRuns() {
     emptyMsg.textContent = 'No runs found yet.';
     return;
   }
-  emptyMsg.textContent = '';
   for (const run of runs) {
     const opt = document.createElement('option');
     opt.value = run.run_id;
     opt.textContent = `${run.name} (${run.framework})`;
     runSelect.appendChild(opt);
   }
-  await loadCaptures(runs[0].run_id);
+  currentRunId = runs[0].run_id;
+  await loadCaptures(currentRunId);
 }
 
-async function loadCaptures(runId) {
-  const res = await fetch(`/api/runs/${runId}/captures`);
-  const captures = await res.json();
-  captureSelect.innerHTML = '';
-  for (const capture of captures) {
+async function loadCaptures(runId, append = false) {
+  const offset = append ? captureOffset : 0;
+  const res = await fetch(`/api/runs/${runId}/captures?offset=${offset}`);
+  const data = await res.json();
+  captureTotal = data.total;
+  captureOffset = data.offset + data.captures.length;
+
+  if (!append) captureSelect.innerHTML = '';
+  for (const capture of data.captures) {
     const opt = document.createElement('option');
     opt.value = capture.capture_id;
     opt.textContent = capture.step === null
-      ? `explain @ ${capture.timestamp}`
+      ? `standalone @ ${capture.timestamp}`
       : `epoch ${capture.step}`;
     captureSelect.appendChild(opt);
   }
-  if (captures.length) {
-    await loadCapture(captures[0].capture_id);
-  } else {
-    activationsBody.innerHTML = '';
-    hideGradcamPanel();
-    hideShapPanel();
-    hideLimePanel();
+
+  loadMoreBtn.style.display = captureOffset < captureTotal ? 'inline-block' : 'none';
+
+  if (!append) {
+    if (data.captures.length) {
+      emptyMsg.textContent = '';
+      captureSelect.value = data.captures[0].capture_id;
+      await selectCapture(data.captures[0].capture_id);
+    } else {
+      emptyMsg.textContent = 'No captures for this run yet.';
+      currentCaptureId = null;
+      tabBar.innerHTML = '';
+      document.querySelectorAll('.tab-panel').forEach(p => { p.style.display = 'none'; });
+    }
   }
 }
 
-async function loadCapture(captureId) {
-  await Promise.all([
-    loadActivations(captureId),
-    loadGradcam(captureId),
-    loadShap(captureId),
-    loadLime(captureId),
-  ]);
+async function selectCapture(captureId) {
+  currentCaptureId = captureId;
+  const res = await fetch(`/api/captures/${captureId}/panels`);
+  availablePanels = await res.json();
+  buildTabBar();
 }
 
-async function loadActivations(captureId) {
-  const res = await fetch(`/api/captures/${captureId}/activations`);
-  const activations = await res.json();
-  activationsBody.innerHTML = '';
+function buildTabBar() {
+  tabBar.innerHTML = '';
+  const visibleTabs = TABS.filter(t => availablePanels[t.id]);
+
+  document.querySelectorAll('.tab-panel').forEach(p => { p.style.display = 'none'; });
+
+  if (!visibleTabs.length) {
+    tabBar.textContent = 'No explanation data available for this capture.';
+    return;
+  }
+
+  for (const tab of visibleTabs) {
+    const btn = document.createElement('button');
+    btn.className = 'tab-button';
+    btn.textContent = tab.label;
+    btn.dataset.tab = tab.id;
+    btn.addEventListener('click', () => activateTab(tab.id));
+    tabBar.appendChild(btn);
+  }
+
+  const nextTab = visibleTabs.some(t => t.id === activeTab) ? activeTab : visibleTabs[0].id;
+  activateTab(nextTab);
+}
+
+async function activateTab(tabId) {
+  activeTab = tabId;
+  tabBar.querySelectorAll('.tab-button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    panel.style.display = panel.id === `panel-${tabId}` ? 'block' : 'none';
+  });
+
+  const panelEl = document.getElementById(`panel-${tabId}`);
+  const captureId = currentCaptureId;
+  showTabLoading(panelEl);
+
+  const data = await ensureTabData(tabId, captureId);
+
+  // Guard against stale responses if the user switched tabs/captures
+  // again before this fetch resolved.
+  if (captureId !== currentCaptureId || activeTab !== tabId) return;
+
+  hideTabLoading(panelEl);
+  renderTab(tabId, data);
+}
+
+function showTabLoading(panelEl) {
+  let loadingEl = panelEl.querySelector('.tab-loading');
+  if (!loadingEl) {
+    loadingEl = document.createElement('div');
+    loadingEl.className = 'tab-loading';
+    loadingEl.textContent = 'Loading…';
+    panelEl.prepend(loadingEl);
+  }
+  loadingEl.style.display = 'block';
+}
+
+function hideTabLoading(panelEl) {
+  const loadingEl = panelEl.querySelector('.tab-loading');
+  if (loadingEl) loadingEl.style.display = 'none';
+}
+
+async function ensureTabData(tabId, captureId) {
+  tabDataCache[captureId] = tabDataCache[captureId] || {};
+  if (tabDataCache[captureId][tabId] !== undefined) {
+    return tabDataCache[captureId][tabId];
+  }
+  const res = await fetch(TAB_ENDPOINTS[tabId](captureId));
+  const data = await res.json();
+  tabDataCache[captureId][tabId] = data;
+  return data;
+}
+
+function renderTab(tabId, data) {
+  if (tabId === 'activations') renderActivationsTab(data);
+  else if (tabId === 'gradcam') renderGradcamTab(data);
+  else if (tabId === 'shap') renderShapTab(data);
+  else if (tabId === 'lime') renderLimeTab(data);
+  else if (tabId === 'boundary') renderBoundaryTab(data);
+  else if (tabId === 'calibration') renderCalibrationTab(data);
+}
+
+function renderActivationsTab(activations) {
+  const tbody = document.getElementById('activations-body');
+  tbody.innerHTML = '';
   for (const [layer, stats] of Object.entries(activations)) {
     const row = document.createElement('tr');
     row.innerHTML = `
@@ -180,24 +596,17 @@ async function loadActivations(captureId) {
       <td>${stats.mean.toFixed(4)}</td>
       <td>${stats.std.toFixed(4)}</td>
     `;
-    activationsBody.appendChild(row);
+    tbody.appendChild(row);
   }
 }
 
-function hideGradcamPanel() {
-  gradcamPanel.style.display = 'none';
-  gradcamData = null;
-}
-
-async function loadGradcam(captureId) {
-  const res = await fetch(`/api/captures/${captureId}/gradcam`);
-  const data = await res.json();
-  if (!data.available || !data.heatmaps.length || !data.sample_inputs.length) {
-    hideGradcamPanel();
+function renderGradcamTab(data) {
+  if (!data.available || !data.heatmaps.length) {
+    currentGradcamData = null;
+    gradcamMeta.textContent = 'No Grad-CAM data available.';
     return;
   }
-  gradcamData = data;
-  gradcamPanel.style.display = 'block';
+  currentGradcamData = data;
   gradcamMeta.textContent = `Layer: ${data.layer_name}`;
 
   gradcamSampleSelect.innerHTML = '';
@@ -211,9 +620,9 @@ async function loadGradcam(captureId) {
 }
 
 function renderGradcamSample(idx) {
-  if (!gradcamData) return;
-  const image = gradcamData.sample_inputs[idx]; // [C][H][W]
-  const heatmap = gradcamData.heatmaps[idx];     // [H][W], values in [0, 1]
+  if (!currentGradcamData) return;
+  const image = currentGradcamData.sample_inputs[idx]; // [C][H][W]
+  const heatmap = currentGradcamData.heatmaps[idx];     // [H][W], values in [0, 1]
   const numChannels = image.length;
   const height = image[0].length;
   const width = image[0][0].length;
@@ -260,20 +669,12 @@ function renderGradcamSample(idx) {
   ctx.putImageData(frame, 0, 0);
 }
 
-function hideShapPanel() {
-  shapPanel.style.display = 'none';
-  shapData = null;
-}
-
-async function loadShap(captureId) {
-  const res = await fetch(`/api/captures/${captureId}/shap`);
-  const data = await res.json();
+function renderShapTab(data) {
   if (!data.available || !data.values.length) {
-    hideShapPanel();
+    currentShapData = null;
     return;
   }
-  shapData = data;
-  shapPanel.style.display = 'block';
+  currentShapData = data;
 
   const hasClasses = data.shape.length === 3;
   shapClassLabel.style.display = hasClasses ? 'inline' : 'none';
@@ -301,13 +702,13 @@ async function loadShap(captureId) {
 function shapValuesForClass(classIdx) {
   // Always returns a 2D [N][F] array, slicing out a class if the
   // underlying values are [N][F][C] (multi-output predict_fn).
-  if (shapData.shape.length === 2) return shapData.values;
-  return shapData.values.map(sample => sample.map(featureRow => featureRow[classIdx]));
+  if (currentShapData.shape.length === 2) return currentShapData.values;
+  return currentShapData.values.map(sample => sample.map(featureRow => featureRow[classIdx]));
 }
 
 function renderShap() {
-  if (!shapData) return;
-  const classIdx = shapData.shape.length === 3 ? parseInt(shapClassSelect.value || 0, 10) : 0;
+  if (!currentShapData) return;
+  const classIdx = currentShapData.shape.length === 3 ? parseInt(shapClassSelect.value || 0, 10) : 0;
   const values2d = shapValuesForClass(classIdx);
   const sampleIdx = parseInt(shapSampleSelect.value || 0, 10);
 
@@ -361,20 +762,12 @@ function renderBarChart(selector, data, diverging) {
     .call(d3.axisBottom(x).ticks(5));
 }
 
-function hideLimePanel() {
-  limePanel.style.display = 'none';
-  limeData = null;
-}
-
-async function loadLime(captureId) {
-  const res = await fetch(`/api/captures/${captureId}/lime`);
-  const data = await res.json();
+function renderLimeTab(data) {
   if (!data.available || !data.values.length) {
-    hideLimePanel();
+    currentLimeData = null;
     return;
   }
-  limeData = data;
-  limePanel.style.display = 'block';
+  currentLimeData = data;
 
   const hasClasses = data.shape.length === 3;
   limeClassLabel.style.display = hasClasses ? 'inline' : 'none';
@@ -401,13 +794,13 @@ async function loadLime(captureId) {
 
 function limeValuesForClass(classIdx) {
   // Same shape convention as shapValuesForClass: [N][F] or [N][F][C].
-  if (limeData.shape.length === 2) return limeData.values;
-  return limeData.values.map(sample => sample.map(featureRow => featureRow[classIdx]));
+  if (currentLimeData.shape.length === 2) return currentLimeData.values;
+  return currentLimeData.values.map(sample => sample.map(featureRow => featureRow[classIdx]));
 }
 
 function renderLime() {
-  if (!limeData) return;
-  const classIdx = limeData.shape.length === 3 ? parseInt(limeClassSelect.value || 0, 10) : 0;
+  if (!currentLimeData) return;
+  const classIdx = currentLimeData.shape.length === 3 ? parseInt(limeClassSelect.value || 0, 10) : 0;
   const values2d = limeValuesForClass(classIdx);
   const sampleIdx = parseInt(limeSampleSelect.value || 0, 10);
 
@@ -417,8 +810,153 @@ function renderLime() {
   renderBarChart('#lime-sample-chart', perSample, true);
 }
 
-runSelect.addEventListener('change', e => loadCaptures(e.target.value));
-captureSelect.addEventListener('change', e => loadCapture(e.target.value));
+const CLASS_PALETTE = ['#4c78a8', '#f58518', '#54a24b', '#e45756', '#72b7b2', '#eeca3b', '#b279a2', '#ff9da6'];
+
+function hexToRgb(hex) {
+  const v = parseInt(hex.slice(1), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+
+function renderBoundaryTab(data) {
+  if (!data.available) return;
+  renderBoundary(data);
+}
+
+function renderBoundary(data) {
+  const gridValues = data.grid_values; // [R_y][R_x]
+  const numRows = gridValues.length;
+  const numCols = gridValues[0].length;
+  const flatVals = gridValues.flat();
+  const isDiscrete = flatVals.every(v => Number.isInteger(v));
+  const minV = Math.min(...flatVals);
+  const maxV = Math.max(...flatVals);
+
+  const gridCanvas = document.getElementById('boundary-grid-canvas');
+  gridCanvas.width = numCols;
+  gridCanvas.height = numRows;
+  const gctx = gridCanvas.getContext('2d');
+  const frame = gctx.createImageData(numCols, numRows);
+
+  for (let row = 0; row < numRows; row++) {
+    for (let col = 0; col < numCols; col++) {
+      const v = gridValues[row][col];
+      let rgb;
+      if (isDiscrete) {
+        rgb = hexToRgb(CLASS_PALETTE[Math.abs(Math.round(v)) % CLASS_PALETTE.length]);
+      } else {
+        const t = (v - minV) / ((maxV - minV) || 1);
+        rgb = [Math.round(255 * t), Math.round(255 * (1 - t)), 120];
+      }
+      const idx = (row * numCols + col) * 4;
+      frame.data[idx] = rgb[0];
+      frame.data[idx + 1] = rgb[1];
+      frame.data[idx + 2] = rgb[2];
+      frame.data[idx + 3] = 190;
+    }
+  }
+  gctx.putImageData(frame, 0, 0);
+
+  const pointsCanvas = document.getElementById('boundary-points-canvas');
+  const cssSize = 400;
+  pointsCanvas.width = cssSize;
+  pointsCanvas.height = cssSize;
+  const pctx = pointsCanvas.getContext('2d');
+  pctx.clearRect(0, 0, cssSize, cssSize);
+
+  const xMin = data.grid_x[0], xMax = data.grid_x[data.grid_x.length - 1];
+  const yMin = data.grid_y[0], yMax = data.grid_y[data.grid_y.length - 1];
+  const toPixel = (px, py) => [
+    (px - xMin) / (xMax - xMin) * cssSize,
+    (py - yMin) / (yMax - yMin) * cssSize,
+  ];
+
+  const pointValues = data.point_true_values || data.point_pred_values;
+
+  for (let i = 0; i < data.points_2d.length; i++) {
+    const [px, py] = data.points_2d[i];
+    const [cx, cy] = toPixel(px, py);
+    const v = pointValues[i];
+    const color = isDiscrete ? CLASS_PALETTE[Math.abs(Math.round(v)) % CLASS_PALETTE.length] : '#222';
+    pctx.beginPath();
+    pctx.arc(cx, cy, 4, 0, 2 * Math.PI);
+    pctx.fillStyle = color;
+    pctx.strokeStyle = '#fff';
+    pctx.lineWidth = 1;
+    pctx.fill();
+    pctx.stroke();
+  }
+}
+
+function renderCalibrationTab(data) {
+  if (!data.available) return;
+  renderCalibration(data);
+}
+
+function renderCalibration(data) {
+  calibrationEce.textContent = `Expected Calibration Error (ECE): ${data.ece.toFixed(4)}`;
+
+  const svg = d3.select('#calibration-chart');
+  svg.selectAll('*').remove();
+  const width = +svg.attr('width');
+  const height = +svg.attr('height');
+  const margin = { top: 10, right: 20, bottom: 40, left: 50 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+
+  const x = d3.scaleLinear().domain([0, 1]).range([0, innerWidth]);
+  const y = d3.scaleLinear().domain([0, 1]).range([innerHeight, 0]);
+
+  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const bins = data.bin_confidence.map((conf, i) => ({
+    start: data.bin_edges[i],
+    end: data.bin_edges[i + 1],
+    confidence: conf,
+    accuracy: data.bin_accuracy[i],
+    count: data.bin_count[i],
+  })).filter(b => b.count > 0);
+
+  g.selectAll('rect')
+    .data(bins)
+    .enter()
+    .append('rect')
+    .attr('x', d => x(d.start))
+    .attr('width', d => Math.max(0, x(d.end) - x(d.start) - 1))
+    .attr('y', d => y(d.accuracy))
+    .attr('height', d => innerHeight - y(d.accuracy))
+    .attr('class', 'shap-bar-agg');
+
+  g.append('line')
+    .attr('x1', x(0)).attr('y1', y(0))
+    .attr('x2', x(1)).attr('y2', y(1))
+    .attr('stroke', '#4a5262')
+    .attr('stroke-dasharray', '4,4');
+
+  g.append('g').attr('class', 'shap-axis')
+    .attr('transform', `translate(0,${innerHeight})`)
+    .call(d3.axisBottom(x).ticks(5));
+  g.append('g').attr('class', 'shap-axis').call(d3.axisLeft(y).ticks(5));
+
+  g.append('text')
+    .attr('x', innerWidth / 2).attr('y', innerHeight + 32)
+    .attr('text-anchor', 'middle').attr('font-size', 12)
+    .attr('fill', '#8a93a6')
+    .text('Confidence');
+  g.append('text')
+    .attr('transform', 'rotate(-90)')
+    .attr('x', -innerHeight / 2).attr('y', -35)
+    .attr('text-anchor', 'middle').attr('font-size', 12)
+    .attr('fill', '#8a93a6')
+    .text('Accuracy');
+}
+
+runSelect.addEventListener('change', async e => {
+  currentRunId = e.target.value;
+  captureOffset = 0;
+  await loadCaptures(currentRunId);
+});
+captureSelect.addEventListener('change', e => selectCapture(e.target.value));
+loadMoreBtn.addEventListener('click', () => loadCaptures(currentRunId, true));
 gradcamSampleSelect.addEventListener('change', e => renderGradcamSample(parseInt(e.target.value, 10)));
 shapSampleSelect.addEventListener('change', renderShap);
 shapClassSelect.addEventListener('change', renderShap);
